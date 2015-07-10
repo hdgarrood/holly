@@ -1,0 +1,19 @@
+{
+  "name": "holly",
+  "description": "An IRC bot for #purescript",
+  "version": "0.1.0",
+  "moduleType": [
+    "node"
+  ],
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-console": "^0.1.0",
+    "purescript-affjax": "hdgarrood/purescript-affjax#node-support",
+    "purescript-node-irc": "hdgarrood/purescript-node-irc#master"
+  }
+}
