@@ -15,7 +15,7 @@
     "purescript-console": "^0.1.0",
     "purescript-affjax": "hdgarrood/purescript-affjax#node-support",
     "purescript-node-irc": "hdgarrood/purescript-node-irc#master",
-    "purescript-arrays": "~0.4.0",
-    "purescript-strings": "~0.5.2"
+    "purescript-arrays": "^0.4.0",
+    "purescript-strings": "^0.5.3"
   }
 }

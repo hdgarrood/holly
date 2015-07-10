@@ -25,7 +25,7 @@ import Node.IRC
 type Effects e = (ajax :: Affjax.AJAX, console :: CONSOLE | e)
 
 main = launchAff $ do
-  let chan = Channel "#purescript-bot-testing"
+  let chan = Channel "#purescript"
   connect (Host "irc.freenode.net") (Nick "holly_") chan $ do
     sayChannel chan (MessageText "Hello, world")
     onChannelMessage chan \event -> do
@@ -40,7 +40,7 @@ data Request
 
 parseRequest :: String -> Maybe Request
 parseRequest =
-  stripPrefix "@" >>> map (S.split " ") >=> go
+  S.stripPrefix "@" >>> map (S.split " ") >=> go
   where
   go words = case A.uncons words of
     Just { head = "pursuit", tail = tail } ->
@@ -77,12 +77,6 @@ getJSON url =
 
 whenJust :: forall m a. (Applicative m) => Maybe a -> (a -> m Unit) -> m Unit
 whenJust = for_
-
-stripPrefix :: String -> String -> Maybe String
-stripPrefix prefix str =
-  case S.indexOf prefix str of
-    Just 0 -> Just $ S.drop (S.length prefix) str
-    _      -> Nothing
 
 newtype PursuitResult = PursuitResult
   { text :: String
