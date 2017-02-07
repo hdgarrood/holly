@@ -1,33 +1,35 @@
 module Main where
 
 import Prelude
-import Control.Bind
-import Data.Foldable
-import Data.Maybe
-import Data.Either
-
-import qualified Data.Array as A
-import qualified Data.Array.Unsafe as AU
-import qualified Data.String as S
-
-import Data.Foreign.Class (IsForeign, read, readProp)
-import Control.Monad.Trans (lift)
-import Control.Monad.Eff.Console (CONSOLE())
+import Data.Array as A
+import Data.Array.Partial as AU
+import Data.MediaType.Common as Mime
+import Data.String as S
+import Network.HTTP.RequestHeader as Header
+import Control.Alt ((<|>))
+import Control.Monad.Aff (Aff, launchAff)
+import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Exception (error)
-import Control.Monad.Error.Class (throwError)
-import Control.Monad.Aff
-import qualified Network.HTTP.Affjax as Affjax
-import qualified Network.HTTP.Affjax.Response as Affjax
-import qualified Network.HTTP.MimeType.Common as Mime
-import qualified Network.HTTP.RequestHeader as Header
-import Node.IRC
+import Control.Monad.Except (runExcept, throwError)
+import Control.Monad.Trans.Class (lift)
+import Data.Either (either)
+import Data.Foldable (for_)
+import Data.Foreign.Class (class IsForeign, read, readProp)
+import Data.Foreign.Index (prop)
+import Data.Maybe (Maybe(..))
+import Data.String (Pattern(..))
+import Network.HTTP.Affjax (AJAX, Affjax, affjax, defaultRequest) as Affjax
+import Network.HTTP.Affjax.Response (class Respondable) as Affjax
+import Node.IRC (Channel(..), Host(..), MessageText(..), Nick(..), connect, onChannelMessage, runMessageText, sayChannel)
+import Partial.Unsafe (unsafePartial)
 
 type Effects e = (ajax :: Affjax.AJAX, console :: CONSOLE | e)
 
 main = launchAff $ do
-  let chan = Channel "#purescript"
+  let chanName = "#purescript"
+  let chan = Channel chanName
   connect (Host "irc.freenode.net") (Nick "holly_") chan $ do
-    sayChannel chan (MessageText "Hello, world")
+    sayChannel chan (MessageText $ "Hello " <> chanName)
     onChannelMessage chan \event -> do
       let mreq = parseRequest $ runMessageText event.text
       whenJust mreq \req -> do
@@ -40,10 +42,10 @@ data Request
 
 parseRequest :: String -> Maybe Request
 parseRequest =
-  S.stripPrefix "@" >>> map (S.split " ") >=> go
+  S.stripPrefix (Pattern "@") >>> map (S.split $ Pattern " ") >=> go
   where
   go words = case A.uncons words of
-    Just { head = "pursuit", tail = tail } ->
+    Just { head : "pursuit", tail : tail } ->
       Just $ PursuitQuery $ S.joinWith " " tail
     _ ->
       Nothing
@@ -53,7 +55,7 @@ performRequest req = case req of
   PursuitQuery query -> performPursuitQuery query
 
 pursuitBaseURL :: String
-pursuitBaseURL = "http://localhost:3000"
+pursuitBaseURL = "https://pursuit.purescript.org"
 
 performPursuitQuery :: forall e. String -> Aff (Effects e) String
 performPursuitQuery =
@@ -62,11 +64,11 @@ performPursuitQuery =
     -- >>> assertOk200
     >>> map _.response
     >=> readForeign
-    >>> map (AU.head >>> renderResult)
+    >>> map (\x -> renderResult (unsafePartial $ AU.head x))
   where
   makeUrl q = pursuitBaseURL <> "/search?q=" <> q
 
-  readForeign = either (throwError <<< error <<< show) return <<< read
+  readForeign = either (throwError <<< error <<< show) pure <<< runExcept <<< read
 
 getJSON :: forall e a. (Affjax.Respondable a) => String -> Affjax.Affjax e a
 getJSON url =
@@ -79,16 +81,20 @@ whenJust :: forall m a. (Applicative m) => Maybe a -> (a -> m Unit) -> m Unit
 whenJust = for_
 
 newtype PursuitResult = PursuitResult
-  { text :: String
+  { title :: String
+  , info :: String
   , package :: String
+  , url :: String
   }
 
 instance isForeignPursuitResult :: IsForeign PursuitResult where
   read o =
-    map PursuitResult $
-      { text: _, package: _ }
-        <$> readProp "text" o
-        <*> readProp "package" o
+    map PursuitResult $ do
+      title <- (prop "info" >=> readProp "title") o <|> pure ""
+      info <- (prop "info" >=> readProp "typeText" >=> (" :: " <> _) >>> pure) o <|> pure ""
+      package <- readProp "package" o
+      url <- readProp "url" o
+      pure { title: title, info: info, package: package, url: url }
 
 renderResult :: PursuitResult -> String
-renderResult (PursuitResult r) = r.text <> " (" <> r.package <> ")"
+renderResult (PursuitResult r) = r.title <> r.info <> "\n" <> r.url <> " (" <> r.package <> ")"
